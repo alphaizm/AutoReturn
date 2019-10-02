@@ -1,0 +1,151 @@
+WAIT_TIME = 100;
+
+STR_BRECV = "BRECV,";
+STR_BSEND_OK = "BSEND,ACK";
+
+{
+	FALSE = 0;
+	TRUE = 1;
+}
+
+{
+	ISTR_B = 66;
+	ISTR_C = 67;
+	ISTR_D = 68;
+	ISTR_E = 69;
+	ISTR_N = 78;
+	ISTR_R = 82;
+	ISTR_S = 83;
+	ISTR_V = 86;
+	ISTR_COMMA = 44;
+}
+
+{
+	MODE_INIT = 0;
+	MODE_RSSI = 1;
+	MODE_ROLE = 2;
+	MODE_METHOD = 3;
+	MODE_LENGTH = 4;
+	MODE_DATA = 5;
+}
+
+Document.Open();
+wait(CONNECT);
+
+echo("■■■■■■■■■■■■■■■■■");
+echo("\r\n");
+echo("自動応答処理開始");
+echo("\r\n");
+
+sopen(OPEN_LOOK);
+while (1) {
+	while ( (str_input = sread(50, 50)) != "" ) {
+		pos = strstr(str_input, STR_BRECV);
+		if( 0 <= pos) {
+			echo("\r\n");
+			echo("◆データ受信！◆");
+			echo("\r\n");
+
+			analyze_mode = MODE_INIT;
+			data_flg = FALSE;
+			data_length = 0;
+			str_send_data = "";
+
+			for(idx = 0; idx < length(str_input); idx++){
+				wstr_data_x = sprintf("%02x", str_input{idx});
+				wstr_data_d = sprintf("%d", str_input{idx});
+
+				if(ISTR_COMMA == wstr_data_d){
+					data_flg = TRUE;
+				}
+
+				if(TRUE == data_flg) {
+					switch (analyze_mode) {
+						case MODE_RSSI:
+							echo("\t◆");
+							echo("RSSI値 → ");
+							echo(str(funcCalcRSSI(wstr_data_d)));
+							echo("\r\n");
+							analyze_mode++;
+							break;
+
+						case MODE_METHOD:
+							echo("\t◆");
+							echo("要求サービス → ");
+							if(L"00" == wstr_data_x) {
+								echo("00 : Notification, Write Command");
+							}
+							else{
+								echo("01 : Indication, Write Request");
+							}
+							echo("\r\n");
+							analyze_mode++;
+							break;
+
+						case MODE_LENGTH:
+							echo("\t◆");
+							echo("データ数 → ");
+							data_length = int(wstr_data_d);
+							echo(data_length);
+							echo("\r\n");
+							analyze_mode++;
+							break;
+						case MODE_DATA:
+							str_send_data{} = wstr_data_d;
+
+							if(data_length <= length(str_send_data)){
+								echo("\t◆");
+								echo("受信データ → ");
+								echo(str_send_data);
+							}
+							break;
+
+						case MODE_ROLE:
+						default:
+							analyze_mode++;
+							break;
+					}
+				}
+			}
+
+			echo("\r\n");
+			echo("◆指定時間待機◆：");
+			echo(str(WAIT_TIME));
+			sleep(WAIT_TIME);
+			echo("\r\n");
+
+			echo("◆メインマイコン側応答");
+			echo("\r\n");
+			send_data = "";
+			send_data{} = ISTR_B;
+			send_data{} = ISTR_S;
+			send_data{} = ISTR_E;
+			send_data{} = ISTR_N;
+			send_data{} = ISTR_D;
+			send_data{} = ISTR_COMMA;
+			send_data{} = 0;
+			send_data{} = 1;
+			send_data{} = 1;
+			send_data{} = 64;
+			swrite(send_data);
+
+			echo("　　⇒処理終了");
+			echo("\r\n");
+		}
+
+		pos = strstr(str_input, STR_BSEND_OK);
+		if( 0 <= pos) {
+			echo("　　⇒送信完了");
+			echo("\r\n");
+		}
+	}
+}
+
+function funcCalcRSSI(value_) {
+	var ret = value_;
+	if(128 <= value_){
+		ret = value_ - 256;
+	}
+
+	return ret;
+}
