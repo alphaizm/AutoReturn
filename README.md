@@ -1,0 +1,2 @@
+# AutoReturn
+RLogin向けスクリプト
